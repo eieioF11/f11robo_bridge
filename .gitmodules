@@ -1,0 +1,3 @@
+[submodule "include/f11robo_msg"]
+	path = include/f11robo_msg
+	url = https://github.com/eieioF11/f11robo_msg.git
