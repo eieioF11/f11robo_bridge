@@ -75,11 +75,12 @@ public:
       std_msgs::msg::ByteMultiArray sw;
       std_msgs::msg::Bool ems;
       sensor_msgs::msg::BatteryState battery;
+      static auto latest_time = this->get_clock()->now();
       light_sensor.data.resize(6);
       sw.data.resize(2);
-      imu.header = make_header(IMU_FRAME, rclcpp::Clock().now());
-      odom_.header = make_header(ODOM_FRAME, rclcpp::Clock().now());
-      battery.header = make_header(BASE_FRAME, rclcpp::Clock().now());
+      imu.header = make_header(IMU_FRAME, this->get_clock()->now());
+      odom_.header = make_header(ODOM_FRAME, this->get_clock()->now());
+      battery.header = make_header(BASE_FRAME, this->get_clock()->now());
       f11robo::command_msg_t command_msg;
       f11robo::sensor_msg_t sensor_msg;
       // command set
@@ -88,10 +89,12 @@ public:
       command_msg.liner_x.data = cmd_vel_.linear.x;
       command_msg.angular_z.data = cmd_vel_.angular.z;
       // データを送信
+      std::cout << "send data" << std::endl;
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::HEADER}));
       boost::asio::write(*serial_, boost::asio::buffer(command_msg.get_data()));
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::END}));
       // データを受信
+      std::cout << "read data" << std::endl;
       uint8_t buf[1], data[33];
       size_t len = boost::asio::read(*serial_, boost::asio::buffer(buf));
       if (len != 0 && buf[0] == f11robo::HEADER) {
@@ -106,7 +109,8 @@ public:
         double rx      = f11robo::param::R * ((w_r + w_l) / 2.0);
         double ry      = f11robo::param::R * ((w_r + w_l) / 2.0);
         double angular = (f11robo::param::R / (2.0 * f11robo::param::L)) * (w_r - w_l);
-        double dt = 0.01;
+        double dt = (this->get_clock()->now() - latest_time).seconds();
+        latest_time = this->get_clock()->now();
         theta_ += angular * dt;
         odom_.pose.pose.position.x += rx * std::cos(theta_) * dt;
         odom_.pose.pose.position.y += ry * std::sin(theta_) * dt;
@@ -148,7 +152,7 @@ public:
       }
       // tf
       geometry_msgs::msg::TransformStamped transform_stamped;
-      transform_stamped.header         = make_header(ODOM_FRAME, rclcpp::Clock().now());
+      transform_stamped.header         = make_header(ODOM_FRAME, this->get_clock()->now());
       transform_stamped.child_frame_id = BASE_FRAME;
       transform_stamped.transform.translation.x = odom_.pose.pose.position.x;
       transform_stamped.transform.translation.y = odom_.pose.pose.position.y;

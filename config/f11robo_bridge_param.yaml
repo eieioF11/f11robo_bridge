@@ -10,6 +10,7 @@ f11robo_bridge_node:
       serial:
         port: "/dev/ttyUSB0"
         baudrate: 115200
+      broadcast_period: 0.001
       max:
         vel: 0.3 #[m/s]
         angular: 0.5 #[rad/s]
