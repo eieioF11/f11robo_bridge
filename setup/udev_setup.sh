@@ -5,7 +5,7 @@ echo  'KERNEL=="ttyACM*", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MOD
 
 echo  'KERNEL=="ttyUSB*", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", MODE:="0666", GROUP:="dialout",  SYMLINK+="ydlidar"' >/etc/udev/rules.d/ydlidar-2303.rules
 
-echo  'KERNEL=="ttyUSB*", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", MODE:="0666", GROUP:="dialout, SYMLINK+="F11Robo"' >/etc/udev/rules.d/F11Robo.rules
+echo  'SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", SYMLINK+="F11Robo", GROUP="dialout"' >/etc/udev/rules.d/F11Robo.rules
 
 service udev reload
 sleep 2
