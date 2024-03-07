@@ -48,9 +48,11 @@ public:
     BASE_FRAME = param<std::string>("f11robo_bridge.frame_id.base_link", "base_link");
     MAX_VEL = param<double>("f11robo_bridge.max.vel", 0.5);
     MAX_ANGULAR = param<double>("f11robo_bridge.max.angular", 1.0);
-    std::string port = param<std::string>("f11robo_bridge_.serial.port", "/dev/ttyUSB0");
+    std::string port = param<std::string>("f11robo_bridge.serial.port", "/dev/ttyUSB0");
     int baudrate = param<int>("f11robo_bridge.serial.baudrate", 115200);
     double BROADCAST_PERIOD = param<double>("f11robo_bridge.broadcast_period", 0.001);
+    RCLCPP_INFO(this->get_logger(), "port:%s",port.c_str());
+    RCLCPP_INFO(this->get_logger(), "baudrate:%d",baudrate);
     serial_ = std::make_shared<boost::asio::serial_port>(io);
     serial_->open(port);
     serial_->set_option(boost::asio::serial_port_base::baud_rate(baudrate));

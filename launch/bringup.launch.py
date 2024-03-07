@@ -63,7 +63,7 @@ def generate_launch_description():
             package='f11robo_bridge',
             executable='f11robo_bridge',
             namespace='',
-            # output="screen",
+            output="screen",
             parameters=[os.path.join(pkg_dir, "config", "f11robo_bridge_param.yaml")],
             respawn=True,
         ),
