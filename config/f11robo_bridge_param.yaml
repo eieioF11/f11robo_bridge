@@ -8,7 +8,7 @@ f11robo_bridge_node:
         base_link: "base_link"
         imu_link: "imu_link"
       serial:
-        port: "/dev/ttyUSB0"
+        port: "/dev/F11Robo"
         baudrate: 115200
       broadcast_period: 0.001
       max:
