@@ -11,6 +11,8 @@ f11robo_bridge_node:
         port: "/dev/F11Robo"
         baudrate: 115200
       broadcast_period: 0.001
+      tf_output: true
+      rpy_inversion: [false, true, true]
       debug_output: true
       max:
         vel: 0.3 #[m/s]

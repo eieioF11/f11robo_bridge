@@ -58,7 +58,12 @@ public:
     serial_->open(port);
     serial_->set_option(boost::asio::serial_port_base::baud_rate(baudrate));
     cmd_vel_ = stop();
+    tf_output_ = param<bool>("f11robo_bridge.tf_output", true);
     debug_output_ = param<bool>("f11robo_bridge.debug_output", false);
+    std::vector<bool> rpy_inv = param<std::vector<bool>>("f11robo_bridge.rpy_inversion", std::vector<bool>{false,false,false});
+    for(int i=0;i<3;i++)
+      rpy_dir_.push_back(rpy_inv[i]?-1.0:1.0);
+    RCLCPP_INFO(this->get_logger(), "rpy_dir:%f,%f,%f",rpy_dir_[0],rpy_dir_[1],rpy_dir_[2]);
     // publisher
     odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(10));
     imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data_raw", rclcpp::QoS(10));
@@ -82,7 +87,7 @@ public:
       std_msgs::msg::Bool ems;
       sensor_msgs::msg::BatteryState battery;
       static auto latest_time = this->get_clock()->now();
-      light_sensor.data.resize(6);
+      light_sensor.data.resize(5);
       sw.data.resize(2);
       imu.header = make_header(IMU_FRAME, this->get_clock()->now());
       odom_.header = make_header(ODOM_FRAME, this->get_clock()->now());
@@ -125,9 +130,9 @@ public:
         odom_.twist.twist.linear.y = ry;
         odom_.twist.twist.angular.z = angular;
         odom_pub_->publish(odom_);
-        imu.orientation = EulerToQuaternion(sensor_msg.rpy.roll.data, sensor_msg.rpy.pitch.data, sensor_msg.rpy.yaw.data);
+        imu.orientation = EulerToQuaternion(rpy_dir_[0]*sensor_msg.rpy.roll.data, rpy_dir_[1]*sensor_msg.rpy.pitch.data, rpy_dir_[2]*sensor_msg.rpy.yaw.data);
         imu_pub_->publish(imu);
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 5; i++)
           light_sensor.data[i] = sensor_msg.sensor_data.light[i];
         light_sensor_pub_->publish(light_sensor);
         for (int i = 0; i < 2; i++)
@@ -157,7 +162,7 @@ public:
           std::cout << "sensor_msg.rpy.pitch: " << sensor_msg.rpy.pitch.data << std::endl;
           std::cout << "sensor_msg.rpy.yaw: " << sensor_msg.rpy.yaw.data << std::endl;
           std::cout << "sensor_msg.sensor_data.light:";
-          for (int i = 0; i < 6; i++)
+          for (int i = 0; i < 5; i++)
             std::cout << " " << (int)sensor_msg.sensor_data.light[i];
           std::cout << std::endl;
           for (int i = 0; i < 2; i++)
@@ -167,21 +172,26 @@ public:
           std::cout << "end: " << (buf[0] == f11robo::END) << std::endl << std::endl;
         }
       }
-      // tf
-      geometry_msgs::msg::TransformStamped transform_stamped;
-      transform_stamped.header         = make_header(ODOM_FRAME, this->get_clock()->now());
-      transform_stamped.child_frame_id = BASE_FRAME;
-      transform_stamped.transform.translation.x = odom_.pose.pose.position.x;
-      transform_stamped.transform.translation.y = odom_.pose.pose.position.y;
-      transform_stamped.transform.translation.z = odom_.pose.pose.position.z;
-      transform_stamped.transform.rotation.x    = odom_.pose.pose.orientation.x;
-      transform_stamped.transform.rotation.y    = odom_.pose.pose.orientation.y;
-      transform_stamped.transform.rotation.z    = odom_.pose.pose.orientation.z;
-      transform_stamped.transform.rotation.w    = odom_.pose.pose.orientation.w;
-      broadcaster_.sendTransform(transform_stamped); });
+      if(tf_output_)
+      {
+        // tf
+        geometry_msgs::msg::TransformStamped transform_stamped;
+        transform_stamped.header         = make_header(ODOM_FRAME, this->get_clock()->now());
+        transform_stamped.child_frame_id = BASE_FRAME;
+        transform_stamped.transform.translation.x = odom_.pose.pose.position.x;
+        transform_stamped.transform.translation.y = odom_.pose.pose.position.y;
+        transform_stamped.transform.translation.z = odom_.pose.pose.position.z;
+        transform_stamped.transform.rotation.x    = odom_.pose.pose.orientation.x;
+        transform_stamped.transform.rotation.y    = odom_.pose.pose.orientation.y;
+        transform_stamped.transform.rotation.z    = odom_.pose.pose.orientation.z;
+        transform_stamped.transform.rotation.w    = odom_.pose.pose.orientation.w;
+        broadcaster_.sendTransform(transform_stamped);
+      }
+    });
   }
 
 private:
+  bool tf_output_;
   bool debug_output_;
   double MAX_VEL;
   double MAX_ANGULAR;
@@ -189,6 +199,7 @@ private:
   std::string ODOM_FRAME;
   std::string BASE_FRAME;
   std::string IMU_FRAME;
+  std::vector<float> rpy_dir_;
   // serial
   boost::asio::io_service io;
   std::shared_ptr<boost::asio::serial_port> serial_;

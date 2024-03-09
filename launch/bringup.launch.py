@@ -67,6 +67,13 @@ def generate_launch_description():
             parameters=[os.path.join(pkg_dir, "config", "f11robo_bridge_param.yaml")],
             respawn=True,
         ),
+        # Node(
+        #     package='robot_localization',
+        #     executable='ekf_node',
+        #     name='ekf_filter_node',
+        #     output='screen',
+        #     parameters=[os.path.join(pkg_dir, "config", "ekf_param.yaml")]
+        # ),
         Node(
             package='ldlidar_stl_ros2',
             executable='ldlidar_stl_ros2_node',
