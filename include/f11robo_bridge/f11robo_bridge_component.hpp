@@ -19,6 +19,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <std_msgs/msg/byte_multi_array.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/float32.hpp>
 #include <sensor_msgs/msg/battery_state.hpp>
 // tf2
 #include <tf2/utils.h>
@@ -57,12 +58,15 @@ public:
     serial_->open(port);
     serial_->set_option(boost::asio::serial_port_base::baud_rate(baudrate));
     cmd_vel_ = stop();
+    debug_output_ = param<bool>("f11robo_bridge.debug_output", false);
     // publisher
     odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(10));
     imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data_raw", rclcpp::QoS(10));
     light_sensor_pub_ = this->create_publisher<std_msgs::msg::ByteMultiArray>("sensor/lights", rclcpp::QoS(10));
     sw_pub_ = this->create_publisher<std_msgs::msg::ByteMultiArray>("sensor/switchs", rclcpp::QoS(10));
     ems_pub_ = this->create_publisher<std_msgs::msg::Bool>("emergency_stop", rclcpp::QoS(10));
+    ems_status_pub_ = this->create_publisher<std_msgs::msg::String>("status/emergency_stop", rclcpp::QoS(10));
+    buttery_status_pub_ = this->create_publisher<std_msgs::msg::Float32>("status/battery_voltage", rclcpp::QoS(10));
     battery_pub_ = this->create_publisher<sensor_msgs::msg::BatteryState>("battery", rclcpp::QoS(10));
     // subscriber
     cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
@@ -91,17 +95,16 @@ public:
       command_msg.liner_x.data = cmd_vel_.linear.x;
       command_msg.angular_z.data = cmd_vel_.angular.z;
       // データを送信
-      std::cout << "send data" << std::endl;
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::HEADER}));
       boost::asio::write(*serial_, boost::asio::buffer(command_msg.get_data()));
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::END}));
       // データを受信
-      std::cout << "read data" << std::endl;
       uint8_t buf[1], data[33];
       size_t len = boost::asio::read(*serial_, boost::asio::buffer(buf));
       if (len != 0 && buf[0] == f11robo::HEADER) {
         len = boost::asio::read(*serial_, boost::asio::buffer(data));
-        std::cout << "data_len: " << len << std::endl;
+        if(debug_output_)
+          std::cout << "data_len: " << len << std::endl;
         for (int i = 0; i < 33; i++)
           sensor_msg.set(i, data[i]);
         len = boost::asio::read(*serial_, boost::asio::buffer(buf));
@@ -134,23 +137,35 @@ public:
         ems_pub_->publish(ems);
         battery.voltage = sensor_msg.battery_voltage.data;
         battery_pub_->publish(battery);
+        // status
+        std_msgs::msg::String ems_status;
+        ems_status.data = "Hardware ems OFF";
+        if(ems.data)
+          ems_status.data = "Hardware ems ON";
+        ems_status_pub_->publish(ems_status);
+        std_msgs::msg::Float32 buttery_status;
+        buttery_status.data = battery.voltage;
+        buttery_status_pub_->publish(buttery_status);
         // debug
-        std::cout << "rx: " << rx << " ry:" << ry << std::endl;
-        std::cout << "angular:" << angular << std::endl;
-        std::cout << "sensor_msg.velocity.right_wheel: " << sensor_msg.velocity.right_wheel.data << std::endl;
-        std::cout << "sensor_msg.velocity.left_wheel: " << sensor_msg.velocity.left_wheel.data << std::endl;
-        std::cout << "sensor_msg.rpy.roll: " << sensor_msg.rpy.roll.data << std::endl;
-        std::cout << "sensor_msg.rpy.pitch: " << sensor_msg.rpy.pitch.data << std::endl;
-        std::cout << "sensor_msg.rpy.yaw: " << sensor_msg.rpy.yaw.data << std::endl;
-        std::cout << "sensor_msg.sensor_data.light:";
-        for (int i = 0; i < 6; i++)
-          std::cout << " " << (int)sensor_msg.sensor_data.light[i];
-        std::cout << std::endl;
-        for (int i = 0; i < 2; i++)
-          std::cout << "sensor_msg.sensor_data.sw[" << i << "]: " << sensor_msg.sensor_data.sw[i] << std::endl;
-        std::cout << "sensor_msg.ems: " << sensor_msg.ems << std::endl;
-        std::cout << "sensor_msg.battery_voltage: " << sensor_msg.battery_voltage.data << std::endl;
-        std::cout << "end: " << (buf[0] == f11robo::END) << std::endl << std::endl;
+        if(debug_output_)
+        {
+          std::cout << "rx: " << rx << " ry:" << ry << std::endl;
+          std::cout << "angular:" << angular << std::endl;
+          std::cout << "sensor_msg.velocity.right_wheel: " << sensor_msg.velocity.right_wheel.data << std::endl;
+          std::cout << "sensor_msg.velocity.left_wheel: " << sensor_msg.velocity.left_wheel.data << std::endl;
+          std::cout << "sensor_msg.rpy.roll: " << sensor_msg.rpy.roll.data << std::endl;
+          std::cout << "sensor_msg.rpy.pitch: " << sensor_msg.rpy.pitch.data << std::endl;
+          std::cout << "sensor_msg.rpy.yaw: " << sensor_msg.rpy.yaw.data << std::endl;
+          std::cout << "sensor_msg.sensor_data.light:";
+          for (int i = 0; i < 6; i++)
+            std::cout << " " << (int)sensor_msg.sensor_data.light[i];
+          std::cout << std::endl;
+          for (int i = 0; i < 2; i++)
+            std::cout << "sensor_msg.sensor_data.sw[" << i << "]: " << sensor_msg.sensor_data.sw[i] << std::endl;
+          std::cout << "sensor_msg.ems: " << sensor_msg.ems << std::endl;
+          std::cout << "sensor_msg.battery_voltage: " << sensor_msg.battery_voltage.data << std::endl;
+          std::cout << "end: " << (buf[0] == f11robo::END) << std::endl << std::endl;
+        }
       }
       // tf
       geometry_msgs::msg::TransformStamped transform_stamped;
@@ -167,6 +182,7 @@ public:
   }
 
 private:
+  bool debug_output_;
   double MAX_VEL;
   double MAX_ANGULAR;
   std::string CMD_VEL_TOPIC;
@@ -187,7 +203,9 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Publisher<std_msgs::msg::ByteMultiArray>::SharedPtr light_sensor_pub_;
   rclcpp::Publisher<std_msgs::msg::ByteMultiArray>::SharedPtr sw_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr ems_status_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ems_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr buttery_status_pub_;
   rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr battery_pub_;
   // subscriber
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
