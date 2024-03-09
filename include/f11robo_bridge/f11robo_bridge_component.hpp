@@ -60,6 +60,7 @@ public:
     cmd_vel_ = stop();
     tf_output_ = param<bool>("f11robo_bridge.tf_output", true);
     debug_output_ = param<bool>("f11robo_bridge.debug_output", false);
+    use_imu_ = param<bool>("f11robo_bridge.odometry.use_imu", false);
     std::vector<bool> rpy_inv = param<std::vector<bool>>("f11robo_bridge.rpy_inversion", std::vector<bool>{false,false,false});
     for(int i=0;i<3;i++)
       rpy_dir_.push_back(rpy_inv[i]?-1.0:1.0);
@@ -121,17 +122,32 @@ public:
         double angular = (f11robo::param::R / (2.0 * f11robo::param::L)) * (w_r - w_l);
         double dt = (this->get_clock()->now() - latest_time).seconds();
         latest_time = this->get_clock()->now();
-        theta_ += angular * dt;
-        odom_.pose.pose.position.x += rx * std::cos(theta_) * dt;
-        odom_.pose.pose.position.y += ry * std::sin(theta_) * dt;
+        double roll,pitch,yaw;
+        if(use_imu_)
+        {
+          theta_ += angular * dt;
+          roll=rpy_dir_[0]*sensor_msg.rpy.roll.data;
+          pitch=rpy_dir_[1]*sensor_msg.rpy.pitch.data;
+          yaw=rpy_dir_[2]*sensor_msg.rpy.yaw.data;
+          imu.orientation = EulerToQuaternion(roll, pitch, yaw);
+        }
+        else
+        {
+          theta_ += angular * dt;
+          roll=0.0;
+          pitch=0.0;
+          yaw=theta_;
+          imu.orientation = EulerToQuaternion(rpy_dir_[0]*sensor_msg.rpy.roll.data, rpy_dir_[1]*sensor_msg.rpy.pitch.data, rpy_dir_[2]*sensor_msg.rpy.yaw.data);
+        }
+        imu_pub_->publish(imu);
+        odom_.pose.pose.position.x += rx * std::cos(yaw) * dt;
+        odom_.pose.pose.position.y += ry * std::sin(yaw) * dt;
         odom_.pose.pose.position.z = 0.0;
-        odom_.pose.pose.orientation = EulerToQuaternion(0.0, 0.0, theta_);
+        odom_.pose.pose.orientation = EulerToQuaternion(roll, pitch, yaw);
         odom_.twist.twist.linear.x = rx;
         odom_.twist.twist.linear.y = ry;
         odom_.twist.twist.angular.z = angular;
         odom_pub_->publish(odom_);
-        imu.orientation = EulerToQuaternion(rpy_dir_[0]*sensor_msg.rpy.roll.data, rpy_dir_[1]*sensor_msg.rpy.pitch.data, rpy_dir_[2]*sensor_msg.rpy.yaw.data);
-        imu_pub_->publish(imu);
         for (int i = 0; i < 5; i++)
           light_sensor.data[i] = sensor_msg.sensor_data.light[i];
         light_sensor_pub_->publish(light_sensor);
@@ -193,6 +209,7 @@ public:
 private:
   bool tf_output_;
   bool debug_output_;
+  bool use_imu_;
   double MAX_VEL;
   double MAX_ANGULAR;
   std::string CMD_VEL_TOPIC;
