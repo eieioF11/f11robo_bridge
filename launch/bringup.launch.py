@@ -67,14 +67,23 @@ def generate_launch_description():
             parameters=[os.path.join(pkg_dir, "config", "f11robo_bridge_param.yaml")],
             respawn=True,
         ),
-        # Node(package='ydlidar_ros2_driver',
-        #     executable='ydlidar_ros2_driver_node',
-        #     namespace='',
-        #     output='screen',
-        #     emulate_tty=True,
-        #     parameters=[os.path.join(pkg_dir, 'config', 'ydlidar.yaml')],
-        #     respawn=True,
-        # )
+        Node(
+            package='ldlidar_stl_ros2',
+            executable='ldlidar_stl_ros2_node',
+            name='LD06',
+            output='screen',
+            parameters=[
+                {'product_name': 'LDLiDAR_LD19'},
+                {'topic_name': 'scan'},
+                {'frame_id': 'laser'},
+                {'port_name': '/dev/lidar'},
+                {'port_baudrate': 230400},
+                {'laser_scan_dir': True},
+                {'enable_angle_crop_func': False},
+                {'angle_crop_min': 135.0},
+                {'angle_crop_max': 225.0}
+            ]
+        )
     ]
 
     return LaunchDescription(list)
