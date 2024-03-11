@@ -52,8 +52,8 @@ public:
     std::string port = param<std::string>("f11robo_bridge.serial.port", "/dev/ttyUSB0");
     int baudrate = param<int>("f11robo_bridge.serial.baudrate", 115200);
     double BROADCAST_PERIOD = param<double>("f11robo_bridge.broadcast_period", 0.001);
-    RCLCPP_INFO(this->get_logger(), "port:%s",port.c_str());
-    RCLCPP_INFO(this->get_logger(), "baudrate:%d",baudrate);
+    RCLCPP_INFO(this->get_logger(), "port:%s", port.c_str());
+    RCLCPP_INFO(this->get_logger(), "baudrate:%d", baudrate);
     serial_ = std::make_shared<boost::asio::serial_port>(io);
     serial_->open(port);
     serial_->set_option(boost::asio::serial_port_base::baud_rate(baudrate));
@@ -61,10 +61,10 @@ public:
     tf_output_ = param<bool>("f11robo_bridge.tf_output", true);
     debug_output_ = param<bool>("f11robo_bridge.debug_output", false);
     use_imu_ = param<bool>("f11robo_bridge.odometry.use_imu", false);
-    std::vector<bool> rpy_inv = param<std::vector<bool>>("f11robo_bridge.rpy_inversion", std::vector<bool>{false,false,false});
-    for(int i=0;i<3;i++)
-      rpy_dir_.push_back(rpy_inv[i]?-1.0:1.0);
-    RCLCPP_INFO(this->get_logger(), "rpy_dir:%f,%f,%f",rpy_dir_[0],rpy_dir_[1],rpy_dir_[2]);
+    std::vector<bool> rpy_inv = param<std::vector<bool>>("f11robo_bridge.rpy_inversion", std::vector<bool>{false, false, false});
+    for (int i = 0; i < 3; i++)
+      rpy_dir_.push_back(rpy_inv[i] ? -1.0 : 1.0);
+    RCLCPP_INFO(this->get_logger(), "rpy_dir:%f,%f,%f", rpy_dir_[0], rpy_dir_[1], rpy_dir_[2]);
     // publisher
     odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(10));
     imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data_raw", rclcpp::QoS(10));
@@ -76,9 +76,8 @@ public:
     battery_pub_ = this->create_publisher<sensor_msgs::msg::BatteryState>("battery", rclcpp::QoS(10));
     // subscriber
     cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
-        CMD_VEL_TOPIC, rclcpp::QoS(10), [&](geometry_msgs::msg::Twist::SharedPtr msg) {
-          cmd_vel_ = *msg;
-        });
+        CMD_VEL_TOPIC, rclcpp::QoS(10), [&](geometry_msgs::msg::Twist::SharedPtr msg)
+        { cmd_vel_ = *msg; });
     // timer
     main_timer_ = this->create_wall_timer(1s * BROADCAST_PERIOD, [&]()
                                           {
@@ -123,19 +122,19 @@ public:
         double dt = (this->get_clock()->now() - latest_time).seconds();
         latest_time = this->get_clock()->now();
         double roll,pitch,yaw;
+        roll=0.0;
+        pitch=0.0;
         if(use_imu_)
         {
-          theta_ += angular * dt;
-          roll=rpy_dir_[0]*sensor_msg.rpy.roll.data;
-          pitch=rpy_dir_[1]*sensor_msg.rpy.pitch.data;
+          // theta_ += angular * dt;
+          // roll=rpy_dir_[0]*sensor_msg.rpy.roll.data;
+          // pitch=rpy_dir_[1]*sensor_msg.rpy.pitch.data;
           yaw=rpy_dir_[2]*sensor_msg.rpy.yaw.data;
           imu.orientation = EulerToQuaternion(roll, pitch, yaw);
         }
         else
         {
           theta_ += angular * dt;
-          roll=0.0;
-          pitch=0.0;
           yaw=theta_;
           imu.orientation = EulerToQuaternion(rpy_dir_[0]*sensor_msg.rpy.roll.data, rpy_dir_[1]*sensor_msg.rpy.pitch.data, rpy_dir_[2]*sensor_msg.rpy.yaw.data);
         }
@@ -202,8 +201,7 @@ public:
         transform_stamped.transform.rotation.z    = odom_.pose.pose.orientation.z;
         transform_stamped.transform.rotation.w    = odom_.pose.pose.orientation.w;
         broadcaster_.sendTransform(transform_stamped);
-      }
-    });
+      } });
   }
 
 private:
@@ -261,7 +259,8 @@ private:
   }
 
   // オイラー角とクオータニオン変換
-  inline geometry_msgs::msg::Quaternion EulerToQuaternion(double roll, double pitch, double yaw) {
+  inline geometry_msgs::msg::Quaternion EulerToQuaternion(double roll, double pitch, double yaw)
+  {
     tf2::Quaternion tf_quat;
     tf_quat.setRPY(roll, pitch, yaw);
     return tf2::toMsg(tf_quat);
