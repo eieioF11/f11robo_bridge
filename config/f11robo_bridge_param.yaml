@@ -17,5 +17,5 @@ f11robo_bridge_node:
       rpy_inversion: [true, true, true]
       debug_output: true
       max:
-        vel: 0.3 #[m/s]
-        angular: 0.5 #[rad/s]
+        vel: 0.1 #[m/s]
+        angular: 1.5 #[rad/s]
