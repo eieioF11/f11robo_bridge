@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<robot name="Robot" xmlns:xacro="http://ros.org/wiki/xacro">
+	<xacro:include filename="color.xacro" />
+	<xacro:include filename="lrf.xacro" />
+	<xacro:include filename="wheel.xacro" />
+
+	<link name="base_link"/>
+	<!--Robotのボディ-->
+	<joint name="body_joint" type="fixed">
+		<parent link="base_link"/>
+		<child  link="body_link"/>
+		<origin xyz="0 0 0" rpy="0 0 0"/>
+	</joint>
+	<link name="body_link">
+		<inertial>
+			<mass value="1.0"/><!--[kg]-->
+			<inertia ixx="50.0" ixy="0.0" ixz="0.0" iyy="50.0" iyz="0.0" izz="50.0" /><!--慣性-->
+		</inertial>
+		<visual><!--ロボットの見た目-->
+			<geometry>
+				<mesh><uri>file://mesh/Robo_model.stl</uri></mesh>
+			</geometry>
+			<material name="clear_gray" />
+		</visual>
+		<collision><!--衝突範囲の設定(基本はロボットの見た目と同じにする)-->
+			<geometry>
+				<mesh><uri>file://mesh/Robo_model.stl</uri></mesh>
+			</geometry>
+		</collision>
+	</link>
+	<gazebo reference="body_link">
+		<material>Gazebo/Gray</material>
+		<!--摩擦係数-->
+		<mu1>0.0</mu1>
+		<mu2>0.0</mu2>
+	</gazebo>
+
+	<!--LRFの位置-->
+	<xacro:laser_macro prefix="laser" parent="base_link" xyz="0.072 -0.43575 0.02" angle="${radians(-90)}" topic="/scan/localization_laser" visualize="True"/>
+
+	<!--車輪の位置-->
+	<xacro:steer_macro prefix="wheel0" parent="base_link" xyz="0.356 0.368 0.0375" deg="0" radius="0.03335" length="0.04">
+		<axis xyz="0 1 0"/>
+	</xacro:steer_macro>
+
+	<xacro:steer_macro prefix="wheel1"  parent="base_link" xyz="-0.356 0.368 0.0375" deg="0" radius="0.03335" length="0.04">
+		<axis xyz="0 1 0"/>
+	</xacro:steer_macro>
+
+</robot>
