@@ -3,7 +3,7 @@
 
 	<xacro:macro name="steer_macro" params="parent prefix xyz deg *joint_axis radius length">
         <!-- drive Link -->
-		<joint name="${prefix}_joint" type="continuous">
+		<joint name="${prefix}_joint" type="fixed">
 			<origin xyz="${xyz}" rpy="0 0 ${radians(deg)}" />
 			<parent link="${parent}"/>
 			<child  link="${prefix}"/>

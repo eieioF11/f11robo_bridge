@@ -24,6 +24,8 @@ ament_auto_add_executable(${PROJECT_NAME} src/main.cpp)
 install(DIRECTORY
   config
   launch
+  xacro
+  meshes
   DESTINATION share/${PROJECT_NAME}/
 )
 

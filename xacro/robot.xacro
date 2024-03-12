@@ -3,6 +3,7 @@
 	<xacro:include filename="color.xacro" />
 	<xacro:include filename="lrf.xacro" />
 	<xacro:include filename="wheel.xacro" />
+	<xacro:include filename="imu.xacro" />
 
 	<link name="base_link"/>
 	<!--Robotのボディ-->
@@ -18,13 +19,13 @@
 		</inertial>
 		<visual><!--ロボットの見た目-->
 			<geometry>
-				<mesh><uri>file://mesh/Robo_model.stl</uri></mesh>
+				<mesh filename="package://f11robo_bridge/meshes/Robo_model.stl"/>
 			</geometry>
-			<material name="clear_gray" />
+			<material name="gray" />
 		</visual>
 		<collision><!--衝突範囲の設定(基本はロボットの見た目と同じにする)-->
 			<geometry>
-				<mesh><uri>file://mesh/Robo_model.stl</uri></mesh>
+				<mesh filename="package://f11robo_bridge/meshes/Robo_model.stl"/>
 			</geometry>
 		</collision>
 	</link>
@@ -36,15 +37,40 @@
 	</gazebo>
 
 	<!--LRFの位置-->
-	<xacro:laser_macro prefix="laser" parent="base_link" xyz="0.072 -0.43575 0.02" angle="${radians(-90)}" topic="/scan/localization_laser" visualize="True"/>
+	<xacro:laser_macro prefix="laser" parent="base_link" xyz="0.04 0.0 0.072" angle="${radians(-90)}" topic="/scan" visualize="True"/>
 
 	<!--車輪の位置-->
-	<xacro:steer_macro prefix="wheel0" parent="base_link" xyz="0.356 0.368 0.0375" deg="0" radius="0.03335" length="0.04">
+	<xacro:steer_macro prefix="wheel0" parent="body_link" xyz="0.0 0.105 0.03" deg="0" radius="0.03335" length="0.015">
 		<axis xyz="0 1 0"/>
 	</xacro:steer_macro>
 
-	<xacro:steer_macro prefix="wheel1"  parent="base_link" xyz="-0.356 0.368 0.0375" deg="0" radius="0.03335" length="0.04">
+	<xacro:steer_macro prefix="wheel1"  parent="body_link" xyz="0.0 -0.105 0.03" deg="0" radius="0.03335" length="0.015">
 		<axis xyz="0 1 0"/>
 	</xacro:steer_macro>
 
+	<!-- imu -->
+	<xacro:imu_macro prefix="imu_link" parent="base_link" xyz="-0.125 0.0 0.045"/>
+
+  <plugin name='diff_drive' filename='libgazebo_ros_diff_drive.so'>
+    <!-- <ros>
+      <namespace>/demo</namespace>
+      <remapping>cmd_vel:=cmd_demo</remapping>
+      <remapping>odom:=odom_demo</remapping>
+    </ros> -->
+    <!-- wheels -->
+    <left_joint>wheel0</left_joint>
+    <right_joint>wheel1</right_joint>
+    <!-- kinematics -->
+    <wheel_separation>0.105</wheel_separation>
+    <wheel_diameter>0.03335</wheel_diameter>
+    <!-- limits -->
+    <max_wheel_torque>20</max_wheel_torque>
+    <max_wheel_acceleration>1.0</max_wheel_acceleration>
+    <!-- output -->
+    <publish_odom>true</publish_odom>
+    <publish_odom_tf>true</publish_odom_tf>
+    <publish_wheel_tf>true</publish_wheel_tf>
+    <odometry_frame>odom</odometry_frame>
+    <robot_base_frame>base_link</robot_base_frame>
+  </plugin>
 </robot>
