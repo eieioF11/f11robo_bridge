@@ -56,6 +56,7 @@ public:
     std::string port = param<std::string>("f11robo_bridge.serial.port", "/dev/ttyUSB0");
     int baudrate = param<int>("f11robo_bridge.serial.baudrate", 115200);
     double BROADCAST_PERIOD = param<double>("f11robo_bridge.broadcast_period", 0.001);
+    reset_odom_func_ = param<bool>("f11robo_bridge.odom_reset_button", false);
     RCLCPP_INFO(this->get_logger(), "port:%s", port.c_str());
     RCLCPP_INFO(this->get_logger(), "baudrate:%d", baudrate);
     move_ = std::make_shared<kinematics::TwoWheelsd>(f11robo::param::R, f11robo::param::L);
@@ -76,6 +77,7 @@ public:
     light_sensor_pub_ = this->create_publisher<std_msgs::msg::ByteMultiArray>("sensor/lights", rclcpp::QoS(10));
     sw_pub_ = this->create_publisher<std_msgs::msg::ByteMultiArray>("sensor/switchs", rclcpp::QoS(10));
     ems_pub_ = this->create_publisher<std_msgs::msg::Bool>("emergency_stop", rclcpp::QoS(10));
+    button_pub_ = this->create_publisher<std_msgs::msg::Bool>("button", rclcpp::QoS(10));
     ems_status_pub_ = this->create_publisher<std_msgs::msg::String>("status/emergency_stop", rclcpp::QoS(10));
     buttery_status_pub_ = this->create_publisher<std_msgs::msg::Float32>("status/battery_voltage", rclcpp::QoS(10));
     battery_pub_ = this->create_publisher<sensor_msgs::msg::BatteryState>("battery", rclcpp::QoS(10));
@@ -89,7 +91,7 @@ public:
       sensor_msgs::msg::Imu imu;
       std_msgs::msg::ByteMultiArray light_sensor;
       std_msgs::msg::ByteMultiArray sw;
-      std_msgs::msg::Bool ems;
+      std_msgs::msg::Bool ems,button;
       sensor_msgs::msg::BatteryState battery;
       static auto latest_time = this->get_clock()->now();
       light_sensor.data.resize(5);
@@ -111,7 +113,7 @@ public:
       boost::asio::write(*serial_, boost::asio::buffer(command_msg.get_data()));
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::END}));
       // データを受信
-      uint8_t buf[1], data[33];
+      uint8_t buf[1], data[f11robo::sensor_msg_t::size];
       size_t len = boost::asio::read(*serial_, boost::asio::buffer(buf));
       if (len != 0 && buf[0] == f11robo::DATA_HEADER) {
         len = boost::asio::read(*serial_, boost::asio::buffer(data));
@@ -121,8 +123,8 @@ public:
           sensor_msg.set(i, data[i]);
         len = boost::asio::read(*serial_, boost::asio::buffer(buf));
         // data set and publish
-        double w_l     = static_cast<double>(sensor_msg.velocity.left_wheel.data);
-        double w_r     = static_cast<double>(sensor_msg.velocity.right_wheel.data);
+        double w_l     = static_cast<double>(math_util::constants::RPS_TO_RADPS*sensor_msg.velocity.left_wheel.data);// w[ras/s]=2*PI*n  PI=3.14... n[rps]
+        double w_r     = static_cast<double>(math_util::constants::RPS_TO_RADPS*sensor_msg.velocity.right_wheel.data);
         double rx      = f11robo::param::R * ((w_r + w_l) / 2.0);
         double ry      = f11robo::param::R * ((w_r + w_l) / 2.0);
         double angular = (f11robo::param::R / (2.0 * f11robo::param::L)) * (w_r - w_l);
@@ -150,7 +152,7 @@ public:
         imu.angular_velocity.z = sensor_msg.gyro.z.data;
         imu.linear_acceleration.x = sensor_msg.acc.x.data;
         imu.linear_acceleration.y = sensor_msg.acc.y.data;
-        imu.linear_acceleration.z = sensor_msg.acc.z.data;
+        imu.linear_acceleration.z = sensor_msg.acc.z.data * -1.f;
         imu_pub_->publish(imu);
         odom_.pose.pose.position.x += rx * std::cos(yaw) * dt;
         odom_.pose.pose.position.y += ry * std::sin(yaw) * dt;
@@ -170,6 +172,15 @@ public:
         ems_pub_->publish(ems);
         battery.voltage = sensor_msg.battery_voltage.data;
         battery_pub_->publish(battery);
+        button.data = sensor_msg.button;
+        if(reset_odom_func_&&button.data)
+        {
+          odom_.pose.pose.position.x = 0.0;
+          odom_.pose.pose.position.y = 0.0;
+          theta_ = 0.0;
+          RCLCPP_INFO(this->get_logger(), "Reset odometry");
+        }
+        button_pub_->publish(button);
         // status
         std_msgs::msg::String ems_status;
         ems_status.data = "Hardware ems OFF";
@@ -182,6 +193,7 @@ public:
         // debug
         if(debug_output_)
         {
+          std::cout << "left_wheel:" << wheels[0] << " right_wheel:" << wheels[1] << std::endl;
           std::cout << "rx: " << rx << " ry:" << ry << std::endl;
           std::cout << "angular:" << angular << std::endl;
           std::cout << "sensor_msg.velocity.right_wheel: " << sensor_msg.velocity.right_wheel.data << std::endl;
@@ -189,6 +201,12 @@ public:
           std::cout << "sensor_msg.rpy.roll: " << sensor_msg.rpy.roll.data << std::endl;
           std::cout << "sensor_msg.rpy.pitch: " << sensor_msg.rpy.pitch.data << std::endl;
           std::cout << "sensor_msg.rpy.yaw: " << sensor_msg.rpy.yaw.data << std::endl;
+          std::cout << "sensor_msg.acc.x: " << sensor_msg.acc.x.data << std::endl;
+          std::cout << "sensor_msg.acc.y: " << sensor_msg.acc.y.data << std::endl;
+          std::cout << "sensor_msg.acc.z: " << sensor_msg.acc.z.data << std::endl;
+          std::cout << "sensor_msg.gyro.x: " << sensor_msg.gyro.x.data << std::endl;
+          std::cout << "sensor_msg.gyro.y: " << sensor_msg.gyro.y.data << std::endl;
+          std::cout << "sensor_msg.gyro.z: " << sensor_msg.gyro.z.data << std::endl;
           std::cout << "sensor_msg.sensor_data.light:";
           for (int i = 0; i < 5; i++)
             std::cout << " " << (int)sensor_msg.sensor_data.light[i];
@@ -197,6 +215,7 @@ public:
             std::cout << "sensor_msg.sensor_data.sw[" << i << "]: " << sensor_msg.sensor_data.sw[i] << std::endl;
           std::cout << "sensor_msg.ems: " << sensor_msg.ems << std::endl;
           std::cout << "sensor_msg.battery_voltage: " << sensor_msg.battery_voltage.data << std::endl;
+          std::cout << "sensor_msg.button: " << sensor_msg.button << std::endl;
           std::cout << "end: " << (buf[0] == f11robo::END) << std::endl << std::endl;
         }
       }
@@ -231,10 +250,10 @@ public:
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::END}));
       uint8_t buf[1];
       size_t len = boost::asio::read(*serial_, boost::asio::buffer(buf));
-      if (len != 0 && buf[0] == f11robo::DATA_HEADER)
+      if (len != 0 && buf[0] == f11robo::PARAM_HEADER)
       {
         len = boost::asio::read(*serial_, boost::asio::buffer(buf));
-        if(buf[0] == f11robo::END)
+        if (buf[0] == f11robo::END)
           break;
       }
       rclcpp::sleep_for(50ms);
@@ -246,6 +265,7 @@ private:
   bool tf_output_;
   bool debug_output_;
   bool use_imu_;
+  bool reset_odom_func_;
   double MAX_VEL;
   double MAX_ANGULAR;
   std::string CMD_VEL_TOPIC;
@@ -269,6 +289,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::ByteMultiArray>::SharedPtr sw_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr ems_status_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ems_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr button_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr buttery_status_pub_;
   rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr battery_pub_;
   // subscriber

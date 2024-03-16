@@ -49,7 +49,7 @@
 	</xacro:steer_macro>
 
 	<!-- imu -->
-	<xacro:imu_macro prefix="imu_link" parent="base_link" xyz="-0.125 0.0 0.045"/>
+	<xacro:imu_macro prefix="imu" parent="base_link" xyz="-0.125 0.0 0.045"/>
 
   <plugin name='diff_drive' filename='libgazebo_ros_diff_drive.so'>
     <!-- <ros>
