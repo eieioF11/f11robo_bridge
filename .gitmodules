@@ -1,3 +1,6 @@
 [submodule "include/f11robo_msg"]
 	path = include/f11robo_msg
 	url = https://github.com/eieioF11/f11robo_msg.git
+[submodule "include/kinematics"]
+	path = include/kinematics
+	url = https://github.com/eieioF11/kinematics.git

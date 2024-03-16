@@ -29,6 +29,8 @@
 #include <tf2_ros/transform_listener.h>
 
 #include "../f11robo_msg/f11robo_msg.hpp"
+#include "../kinematics/move/move_base.hpp"
+#include "../kinematics/move/two_wheels.hpp"
 
 using std::placeholders::_1;
 using namespace std::chrono_literals;
@@ -47,6 +49,8 @@ public:
     ODOM_FRAME = param<std::string>("f11robo_bridge.frame_id.odom", "odom");
     IMU_FRAME = param<std::string>("f11robo_bridge.frame_id.imu_link", "imu_link");
     BASE_FRAME = param<std::string>("f11robo_bridge.frame_id.base_link", "base_link");
+    std::vector<double> l_pid_gain = param<std::vector<double>>("f11robo_bridge.pid_gain.left_md", std::vector<double>{0.1, 0.0, 0.008});
+    std::vector<double> r_pid_gain = param<std::vector<double>>("f11robo_bridge.pid_gain.right_md", std::vector<double>{0.1, 0.0, 0.008});
     MAX_VEL = param<double>("f11robo_bridge.max.vel", 0.5);
     MAX_ANGULAR = param<double>("f11robo_bridge.max.angular", 1.0);
     std::string port = param<std::string>("f11robo_bridge.serial.port", "/dev/ttyUSB0");
@@ -54,6 +58,7 @@ public:
     double BROADCAST_PERIOD = param<double>("f11robo_bridge.broadcast_period", 0.001);
     RCLCPP_INFO(this->get_logger(), "port:%s", port.c_str());
     RCLCPP_INFO(this->get_logger(), "baudrate:%d", baudrate);
+    move_ = std::make_shared<kinematics::TwoWheelsd>(f11robo::param::R, f11robo::param::L);
     serial_ = std::make_shared<boost::asio::serial_port>(io);
     serial_->open(port);
     serial_->set_option(boost::asio::serial_port_base::baud_rate(baudrate));
@@ -97,20 +102,22 @@ public:
       // command set
       cmd_vel_.linear.x = std::max(std::min(cmd_vel_.linear.x, MAX_VEL), -MAX_VEL);
       cmd_vel_.angular.z = std::max(std::min(cmd_vel_.angular.z, MAX_ANGULAR), -MAX_ANGULAR);
-      command_msg.liner_x.data = cmd_vel_.linear.x;
-      command_msg.angular_z.data = cmd_vel_.angular.z;
+      move_->move(cmd_vel_.linear.x, 0.0, cmd_vel_.angular.z);
+      std::vector<double> wheels = move_->get_wheel_speeds();
+      command_msg.velocity.left_wheel.data = wheels[0];
+      command_msg.velocity.right_wheel.data = wheels[1];
       // データを送信
-      boost::asio::write(*serial_, boost::asio::buffer({f11robo::HEADER}));
+      boost::asio::write(*serial_, boost::asio::buffer({f11robo::DATA_HEADER}));
       boost::asio::write(*serial_, boost::asio::buffer(command_msg.get_data()));
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::END}));
       // データを受信
       uint8_t buf[1], data[33];
       size_t len = boost::asio::read(*serial_, boost::asio::buffer(buf));
-      if (len != 0 && buf[0] == f11robo::HEADER) {
+      if (len != 0 && buf[0] == f11robo::DATA_HEADER) {
         len = boost::asio::read(*serial_, boost::asio::buffer(data));
         if(debug_output_)
           std::cout << "data_len: " << len << std::endl;
-        for (int i = 0; i < 33; i++)
+        for (int i = 0; i < f11robo::sensor_msg_t::size; i++)
           sensor_msg.set(i, data[i]);
         len = boost::asio::read(*serial_, boost::asio::buffer(buf));
         // data set and publish
@@ -138,6 +145,12 @@ public:
           yaw=theta_;
           imu.orientation = EulerToQuaternion(rpy_dir_[0]*sensor_msg.rpy.roll.data, rpy_dir_[1]*sensor_msg.rpy.pitch.data, rpy_dir_[2]*sensor_msg.rpy.yaw.data);
         }
+        imu.angular_velocity.x = sensor_msg.gyro.x.data;
+        imu.angular_velocity.y = sensor_msg.gyro.y.data;
+        imu.angular_velocity.z = sensor_msg.gyro.z.data;
+        imu.linear_acceleration.x = sensor_msg.acc.x.data;
+        imu.linear_acceleration.y = sensor_msg.acc.y.data;
+        imu.linear_acceleration.z = sensor_msg.acc.z.data;
         imu_pub_->publish(imu);
         odom_.pose.pose.position.x += rx * std::cos(yaw) * dt;
         odom_.pose.pose.position.y += ry * std::sin(yaw) * dt;
@@ -202,6 +215,17 @@ public:
         transform_stamped.transform.rotation.w    = odom_.pose.pose.orientation.w;
         broadcaster_.sendTransform(transform_stamped);
       } });
+      // param送信
+      f11robo::param_msg_t param_msg;
+      param_msg.left_md_pid_gain.kp.data = l_pid_gain[0];
+      param_msg.left_md_pid_gain.ki.data = l_pid_gain[1];
+      param_msg.left_md_pid_gain.kd.data = l_pid_gain[2];
+      param_msg.right_md_pid_gain.kp.data = r_pid_gain[0];
+      param_msg.right_md_pid_gain.ki.data = r_pid_gain[1];
+      param_msg.right_md_pid_gain.kd.data = r_pid_gain[2];
+      boost::asio::write(*serial_, boost::asio::buffer({f11robo::PARAM_HEADER}));
+      boost::asio::write(*serial_, boost::asio::buffer(param_msg.get_data()));
+      boost::asio::write(*serial_, boost::asio::buffer({f11robo::END}));
   }
 
 private:
@@ -240,6 +264,8 @@ private:
   nav_msgs::msg::Odometry odom_;
   // twist
   geometry_msgs::msg::Twist cmd_vel_;
+
+  std::shared_ptr<kinematics::MoveBased> move_;
 
   template <class T>
   T param(const std::string &name, const T &def)
