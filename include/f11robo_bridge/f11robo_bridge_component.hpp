@@ -215,8 +215,11 @@ public:
         transform_stamped.transform.rotation.w    = odom_.pose.pose.orientation.w;
         broadcaster_.sendTransform(transform_stamped);
       } });
-      // param送信
-      f11robo::param_msg_t param_msg;
+    // param送信
+    f11robo::param_msg_t param_msg;
+    RCLCPP_INFO(this->get_logger(), "Parameter Sending!");
+    while (1)
+    {
       param_msg.left_md_pid_gain.kp.data = l_pid_gain[0];
       param_msg.left_md_pid_gain.ki.data = l_pid_gain[1];
       param_msg.left_md_pid_gain.kd.data = l_pid_gain[2];
@@ -226,6 +229,17 @@ public:
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::PARAM_HEADER}));
       boost::asio::write(*serial_, boost::asio::buffer(param_msg.get_data()));
       boost::asio::write(*serial_, boost::asio::buffer({f11robo::END}));
+      uint8_t buf[1];
+      size_t len = boost::asio::read(*serial_, boost::asio::buffer(buf));
+      if (len != 0 && buf[0] == f11robo::DATA_HEADER)
+      {
+        len = boost::asio::read(*serial_, boost::asio::buffer(buf));
+        if(buf[0] == f11robo::END)
+          break;
+      }
+      rclcpp::sleep_for(50ms);
+    }
+    RCLCPP_INFO(this->get_logger(), "Initialization complete!");
   }
 
 private:
